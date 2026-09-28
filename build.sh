@@ -5,6 +5,9 @@ cd "$(dirname "$0")"
 
 JOBS="$(nproc)"
 
+# Windows/mingw links kernel32 dynamically, so -static only applies to glibc.
+EXTRA_LDFLAGS="${EXTRA_LDFLAGS:--static -Wl,--gc-sections}"
+
 # everything off, then opt back in. deps come along automatically via *_select.
 ./configure \
   --disable-everything \
@@ -18,7 +21,7 @@ JOBS="$(nproc)"
   --disable-vulkan --disable-opencl --disable-libmfx --disable-cuda \
   --disable-zlib --disable-bzlib \
   --extra-cflags="-Os -ffunction-sections -fdata-sections" \
-  --extra-ldflags="-static -Wl,--gc-sections" \
+  --extra-ldflags="$EXTRA_LDFLAGS" \
   \
   --enable-decoder=opus,aac,vorbis,mp3,mp3float,flac,alac,pcm_s16le \
   --enable-encoder=pcm_s16le \
