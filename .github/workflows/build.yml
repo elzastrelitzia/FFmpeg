@@ -16,6 +16,12 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # Per-step "shell:" cannot hold an expression, and defaults.run does accept
+    # matrix, so the OS choice goes here and covers every run step at once.
+    defaults:
+      run:
+        shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,10 +36,6 @@ jobs:
             ldflags: '-Wl,--gc-sections'
             artifact: ffmpeg-windows-x86_64.exe
             binary: ./ffmpeg.exe
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -44,33 +46,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends nasm make gcc libc6-dev
 
-      # msys2 ships to C:\tools\msys64, not C:\msys64.
-      - name: Install toolchain (Windows)
+      - name: Set up MSYS2
         if: runner.os == 'Windows'
-        run: |
-          choco install -y --no-progress msys2
-          C:/tools/msys64/usr/bin/bash.exe -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-nasm diffutils'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          # base-devel gives the msys make and diffutils that ffmpeg's configure
+          # needs. The mingw toolchain group gives gcc/binutils in /mingw64/bin.
+          install: base-devel mingw-w64-x86_64-toolchain mingw-w64-x86_64-nasm
 
       - name: Build
         env:
           EXTRA_LDFLAGS: ${{ matrix.ldflags }}
-          MSYSTEM: ${{ runner.os == 'Windows' && 'MINGW64' || '' }}
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            C:/tools/msys64/usr/bin/bash.exe -lc "export PATH=/mingw64/bin:\$PATH; echo \"PATH=\$PATH\"; ls -d /mingw64 /mingw64/bin 2>&1; ls /mingw64/bin 2>&1 | grep -iE 'make|gcc|cc1' ; which make gcc; cd '$PWD' && EXTRA_LDFLAGS='$EXTRA_LDFLAGS' ./build.sh"
-          else
-            ./build.sh
-          fi
+        run: ./build.sh
 
       - name: Verify
         env:
           BINARY: ${{ matrix.binary }}
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            C:/tools/msys64/usr/bin/bash.exe -lc "cd \"\$GITHUB_WORKSPACE\" && '$BINARY' -hide_banner -version"
-          else
-            "$BINARY" -hide_banner -version
-          fi
+        run: "$BINARY -hide_banner -version"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
