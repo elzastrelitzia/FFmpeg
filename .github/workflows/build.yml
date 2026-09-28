@@ -46,9 +46,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           choco install -y --no-progress msys2
-          C:/tools/msys64/usr/bin/bash.exe -lc \
-            'pacman -Sy --noconfirm --needed \
-               mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-nasm'
+          C:/tools/msys64/usr/bin/bash.exe -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-nasm'
 
       - name: Build
         env:
