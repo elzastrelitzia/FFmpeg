@@ -1,0 +1,99 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (glibc, static)
+            os: ubuntu-latest
+            ldflags: '-static -Wl,--gc-sections'
+            artifact: ffmpeg-linux-x86_64
+            binary: ./ffmpeg
+          - name: Windows (mingw-w64)
+            os: windows-latest
+            ldflags: '-Wl,--gc-sections'
+            artifact: ffmpeg-windows-x86_64.exe
+            binary: ./ffmpeg.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install toolchain (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nasm make gcc libc6-dev
+
+      # msys2 ships to C:\tools\msys64, not C:\msys64.
+      - name: Install toolchain (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install -y --no-progress msys2
+          C:/tools/msys64/usr/bin/bash.exe -lc \
+            'pacman -Sy --noconfirm --needed \
+               mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-nasm'
+
+      - name: Build
+        env:
+          EXTRA_LDFLAGS: ${{ matrix.ldflags }}
+          MSYSTEM: ${{ runner.os == 'Windows' && 'MINGW64' || '' }}
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            C:/tools/msys64/usr/bin/bash.exe -lc "EXTRA_LDFLAGS='$EXTRA_LDFLAGS' ./build.sh"
+          else
+            ./build.sh
+          fi
+
+      - name: Verify
+        env:
+          BINARY: ${{ matrix.binary }}
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            C:/tools/msys64/usr/bin/bash.exe -lc "'$BINARY' -hide_banner -version"
+          else
+            "$BINARY" -hide_banner -version
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+          if-no-files-found: error
+
+  release:
+    name: Release ${{ github.ref_name }}
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            dist/* || gh release upload "${{ github.ref_name }}" dist/* --clobber
