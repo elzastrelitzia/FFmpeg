@@ -57,7 +57,7 @@ jobs:
           MSYSTEM: ${{ runner.os == 'Windows' && 'MINGW64' || '' }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            C:/tools/msys64/usr/bin/bash.exe -lc "export PATH=/mingw64/bin:\$PATH; cd '$PWD' && EXTRA_LDFLAGS='$EXTRA_LDFLAGS' ./build.sh"
+            C:/tools/msys64/usr/bin/bash.exe -lc "export PATH=/mingw64/bin:\$PATH; echo \"PATH=\$PATH\"; ls -d /mingw64 /mingw64/bin 2>&1; ls /mingw64/bin 2>&1 | grep -iE 'make|gcc|cc1' ; which make gcc; cd '$PWD' && EXTRA_LDFLAGS='$EXTRA_LDFLAGS' ./build.sh"
           else
             ./build.sh
           fi
