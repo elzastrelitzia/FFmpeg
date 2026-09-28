@@ -55,13 +55,21 @@ fi
 #    never runs the binary, so it works on a file that cannot start at all.
 #    Running the exe below proves much less: on this machine MSYS2 supplies both
 #    offending DLLs, so a dynamic build passes right here and dies on a user's.
-deps=$(objdump -p ./ffmpeg.exe | sed -n 's/.*DLL Name: //p' | tr -d '\r' | sort -u)
+# The padding after the name is what broke an earlier version of this check:
+# sed leaves the trailing spaces, so every name failed the allowlist and a
+# perfectly good build reported its own system DLLs as defects. Strip both
+# ends rather than guess how wide the column is.
+deps=$(objdump -p ./ffmpeg.exe | sed -n 's/.*DLL Name: //p' | tr -d '\r' \
+       | sed 's/[[:space:]]*$//' | sort -u)
 
 bad=""
 for dll in $deps; do
+  # The .dll suffix is part of the name. An allowlist written without it matches
+  # nothing, every DLL falls through to the catch-all, and a good build reports
+  # its own system DLLs as defects. Only Windows system libraries belong here: a
+  # mingw runtime name showing up is the exact defect this file exists to catch.
   case "${dll,,}" in
-    bcrypt|gdi32|imm32|kernel32|msvcrt|ole32|secur32|shell32|user32|version|\
-    winmm|ws2_32|bcryptprimitives|ntdll|shlwapi|psapi) ;;
+    bcrypt.dll|bcryptprimitives.dll|gdi32.dll|imm32.dll|kernel32.dll|msvcrt.dll|ntdll.dll|ole32.dll|psapi.dll|secur32.dll|shell32.dll|shlwapi.dll|user32.dll|version.dll|winmm.dll|ws2_32.dll) ;;
     *) bad="$bad $dll" ;;
   esac
 done
