@@ -57,7 +57,7 @@ jobs:
           MSYSTEM: ${{ runner.os == 'Windows' && 'MINGW64' || '' }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            C:/tools/msys64/usr/bin/bash.exe -lc "cd \"\$GITHUB_WORKSPACE\" && EXTRA_LDFLAGS='$EXTRA_LDFLAGS' ./build.sh"
+            C:/tools/msys64/usr/bin/bash.exe -lc "cd '$PWD' && EXTRA_LDFLAGS='$EXTRA_LDFLAGS' ./build.sh"
           else
             ./build.sh
           fi
