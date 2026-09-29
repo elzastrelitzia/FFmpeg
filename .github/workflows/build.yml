@@ -2,9 +2,6 @@ name: Build
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -66,9 +63,9 @@ jobs:
           path: ${{ matrix.binary }}
           if-no-files-found: error
 
-  # Every push to master gets a release. The tag is generated, not pushed by a
-  # human, so no tag trigger exists in `on:` and the release cannot re-trigger
-  # this workflow.
+  # Runs on every manual dispatch, not on a tag. The tag is generated from the
+  # run number, so there is no tag trigger in `on:` and the release cannot
+  # re-trigger this workflow.
   release:
     name: Release
     needs: build
