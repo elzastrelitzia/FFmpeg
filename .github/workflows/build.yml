@@ -74,6 +74,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # gh release create shells out to git, so it needs a repository.
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
