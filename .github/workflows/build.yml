@@ -27,12 +27,10 @@ jobs:
             os: ubuntu-latest
             artifact: ffmpeg-linux-x86_64
             binary: ./ffmpeg
-            cc: ccache gcc
           - name: Windows (mingw-w64)
             os: windows-latest
             artifact: ffmpeg-windows-x86_64.exe
             binary: ./ffmpeg.exe
-            cc: ccache gcc
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -67,16 +65,30 @@ jobs:
       # The Windows script owns the flags and the import check, so the flag that
       # broke Windows cannot be set from the matrix again. Linux uses build.sh,
       # which already defaults to -static.
+      #
+      # ccache goes in through PATH, not CC. configure rewrites CC to whatever it
+      # probed ("C compiler gcc"), so "CC: ccache gcc" installs ccache and then
+      # never calls it. A gcc symlink to ccache ahead of the real one survives
+      # that, because configure only ever sees a bare "gcc".
       - name: Build
         env:
-          # ffmpeg's configure has no ccache support, so the wrapper goes in
-          # CC and LD here. LD is used for the final link, which is also a
-          # cacheable compile.
-          CC: ${{ matrix.cc }}
-          LD: ${{ matrix.cc }}
           CCACHE_DIR: ${{ github.workspace }}/.ccache
           CCACHE_MAXSIZE: 1G
-        run: ${{ runner.os == 'Windows' && './build-windows.sh' || './build.sh' }}
+        run: |
+          mkdir -p .ccache-bin
+          ln -sf "$(command -v ccache)" .ccache-bin/gcc
+          ln -sf "$(command -v ccache)" .ccache-bin/g++
+          export PATH="$PWD/.ccache-bin:$PATH"
+          ${{ runner.os == 'Windows' && './build-windows.sh' || './build.sh' }}
+
+      # Ccache without a hit rate is a guess. A cold cache is slower than no
+      # cache at all, so this line is the only way to tell whether it is earning
+      # its place.
+      - name: ccache stats
+        if: always()
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: ccache --show-stats
 
       # Ccache without a hit rate is a guess. A cold cache is slower than no
       # cache at all, so this line is the only way to tell whether it is earning
