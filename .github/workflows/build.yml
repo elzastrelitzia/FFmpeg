@@ -27,10 +27,12 @@ jobs:
             os: ubuntu-latest
             artifact: ffmpeg-linux-x86_64
             binary: ./ffmpeg
+            cc: ccache gcc
           - name: Windows (mingw-w64)
             os: windows-latest
             artifact: ffmpeg-windows-x86_64.exe
             binary: ./ffmpeg.exe
+            cc: ccache gcc
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -39,7 +41,19 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends nasm make gcc libc6-dev
+          sudo apt-get install -y --no-install-recommends nasm make gcc libc6-dev ccache
+
+      # Worthless without this. GitHub gives every run a fresh VM, so an
+      # unwarmed ccache turns every compile into a miss plus a few percent of
+      # ccache overhead. Keyed on the build scripts, since those hold the flags
+      # that decide the preprocessed input. CCACHE_DIR is pinned into the
+      # workspace so both legs cache the same path and actions/cache can find
+      # it under either shell's idea of home.
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.os }}-${{ hashFiles('build.sh', 'build-windows.sh') }}
 
       - name: Set up MSYS2
         if: runner.os == 'Windows'
@@ -48,12 +62,20 @@ jobs:
           msystem: MINGW64
           # base-devel gives the msys make and diffutils that ffmpeg's configure
           # needs. The mingw toolchain group gives gcc/binutils in /mingw64/bin.
-          install: base-devel mingw-w64-x86_64-toolchain mingw-w64-x86_64-nasm
+          install: base-devel mingw-w64-x86_64-toolchain mingw-w64-x86_64-nasm ccache
 
       # The Windows script owns the flags and the import check, so the flag that
       # broke Windows cannot be set from the matrix again. Linux uses build.sh,
       # which already defaults to -static.
       - name: Build
+        env:
+          # ffmpeg's configure has no ccache support, so the wrapper goes in
+          # CC and LD here. LD is used for the final link, which is also a
+          # cacheable compile.
+          CC: ${{ matrix.cc }}
+          LD: ${{ matrix.cc }}
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 1G
         run: ${{ runner.os == 'Windows' && './build-windows.sh' || './build.sh' }}
 
       - name: Upload artifact
