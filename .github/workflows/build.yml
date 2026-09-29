@@ -82,6 +82,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
+          # Without this each artifact lands in its own subdirectory and
+          # "dist/*" expands to directories, not files.
+          merge-multiple: true
 
       - name: Create release
         env:
