@@ -78,6 +78,13 @@ jobs:
           CCACHE_MAXSIZE: 1G
         run: ${{ runner.os == 'Windows' && './build-windows.sh' || './build.sh' }}
 
+      # Ccache without a hit rate is a guess. A cold cache is slower than no
+      # cache at all, so this line is the only way to tell whether it is earning
+      # its place.
+      - name: ccache stats
+        if: always()
+        run: ccache --show-stats
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
